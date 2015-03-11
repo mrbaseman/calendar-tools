@@ -17,7 +17,16 @@
     GNU General Public License for more details.
 
     You should have received a copy of the GNU General Public License
-    along with this program.  If not, see &lt;http://www.gnu.org/licenses/&gt;.
+    along with this program.  If not, see http://www.gnu.org/licenses/.
+*/
+
+/*
+  to use this script, just put it into the admin folder of your Baikal
+  installation and call it from your web browser. It will prompt for
+  the admin password and present you a table where you can set up the
+  access rights for each user to another users calendars. There are
+  three settings: NONE (which is the default), readonly access, and
+  read-write access
 */
 
 # Set up environment so that the include of the Baikal configuration works.
