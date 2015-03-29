@@ -1,0 +1,22 @@
+this patch enables Baikal 0.2.7 to deliver caldav directories via http-GET
+diff -ru ./baikal-flat/vendor/sabre/dav/lib/Sabre/DAV/Server.php ../tmp/baikal-flat/vendor/sabre/dav/lib/Sabre/DAV/Server.php
+--- ./baikal-flat/vendor/sabre/dav/lib/Sabre/DAV/Server.php	2013-10-02 20:38:26.000000000 +0200
++++ ../tmp/baikal-flat/vendor/sabre/dav/lib/Sabre/DAV/Server.php	2015-01-25 22:44:57.283068171 +0100
+@@ -525,9 +525,15 @@
+         $node = $this->tree->getNodeForPath($uri,0);
+ 
+         if (!$this->checkPreconditions(true)) return false;
+-        if (!$node instanceof IFile) throw new Exception\NotImplemented('GET is only implemented on File objects');
+-
++	$body="";
++	if(get_class($node) == "Sabre\CalDAV\Calendar"){
++		foreach ($node->getChildren() as $n) 
++			if ($n instanceof IFile) 
++				$body .= $n->get() . "\n\n";
++	} else {       
++        if (!$node instanceof IFile) throw new Exception\NotImplemented('GET is only implemented on File objects not for ' . get_class($node));
+         $body = $node->get();
++	}
+ 
+         // Converting string into stream, if needed.
+         if (is_string($body)) {
