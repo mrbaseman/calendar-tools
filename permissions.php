@@ -38,6 +38,8 @@ ini_set("display_errors", 0);
 ini_set("log_errors", 1);
 error_reporting(E_ALL);
 
+session_start();
+
 define("BAIKAL_CONTEXT", TRUE);
 define("BAIKAL_CONTEXT_ADMIN", TRUE);
 define("PROJECT_CONTEXT_BASEURI", "/admin/");
@@ -83,19 +85,68 @@ require(PROJECT_PATH_ROOT . 'Specific/config.system.php');
 
 # make sure the user is authenticated as admin, if not authenticate
 
-if (!isset($_SERVER['PHP_AUTH_USER'])) {
-    header('WWW-Authenticate: Basic realm="My Realm"');
-    header('HTTP/1.0 401 Unauthorized');
-    die ("You are not allowed to see this page. Please authenticate.");
-} 
+if(!(isset($_SESSION["baikaladminauth"]) && $_SESSION["baikaladminauth"] === md5(BAIKAL_ADMIN_PASSWORDHASH))) {
+    # There is no authentication from baikal, so we have to try to do authentication,
+    # see php.net/manual/features.http-auth.php
+    if (defined("BAIKAL_DAV_AUTH_TYPE") && ( BAIKAL_DAV_AUTH_TYPE === "Basic")) {
+       # Basic authentication
+       if (!isset($_SERVER['PHP_AUTH_USER'])) {
+	   header('WWW-Authenticate: Basic realm="' . BAIKAL_AUTH_REALM . '"');
+	   header('HTTP/1.0 401 Unauthorized');
+	   die ("You are not allowed to see this page. Please authenticate.");
+       } 
 
-$sPassHash =  md5('admin:' . BAIKAL_AUTH_REALM . ':' . $_SERVER['PHP_AUTH_PW']);
-                
-if( ! ( $_SERVER['PHP_AUTH_USER'] === "admin" 
-        && $sPassHash === BAIKAL_ADMIN_PASSWORDHASH)) {
-    die ("You must be admin to view this page. Please authenticate properly.");
+       $sPassHash =  md5('admin:' . BAIKAL_AUTH_REALM . ':' . $_SERVER['PHP_AUTH_PW']);
+
+       if( ! ( $_SERVER['PHP_AUTH_USER'] === "admin" 
+               && $sPassHash === BAIKAL_ADMIN_PASSWORDHASH)) {
+	   die ("You must be admin to view this page. Please authenticate properly.");
+       }
+    } else {
+        # Digest authentication
+
+	if (empty($_SERVER['PHP_AUTH_DIGEST'])) {
+	    header('HTTP/1.1 401 Unauthorized');
+	    header('WWW-Authenticate: Digest realm="'.BAIKAL_AUTH_REALM.
+        	   '",qop="auth",nonce="'.uniqid().'",opaque="'.md5(BAIKAL_AUTH_REALM).'"');
+
+	    die('You are not allowed to see this page. Please authenticate.');
+	}
+
+	// next we need this function to parse the http auth header
+	function http_digest_parse($txt)
+	{
+	    // protect against missing data
+	    $needed_parts = array('nonce'=>1, 'nc'=>1, 'cnonce'=>1, 'qop'=>1, 'username'=>1, 'uri'=>1, 'response'=>1);
+	    $data = array();
+	    $keys = implode('|', array_keys($needed_parts));
+
+	    preg_match_all('@(' . $keys . ')=(?:([\'"])([^\2]+?)\2|([^\s,]+))@', $txt, $matches, PREG_SET_ORDER);
+
+	    foreach ($matches as $m) {
+        	$data[$m[1]] = $m[3] ? $m[3] : $m[4];
+        	unset($needed_parts[$m[1]]);
+	    }
+
+	    return $needed_parts ? false : $data;
+	}	
+
+	// now use it to analyze the PHP_AUTH_DIGEST variable
+	if (!($data = http_digest_parse($_SERVER['PHP_AUTH_DIGEST'])) ||
+	    !($data['username'] === "admin"))
+	    die("You must be admin to view this page. Please authenticate properly.");
+
+	// generate the valid response
+	$A1 = BAIKAL_ADMIN_PASSWORDHASH;
+	$A2 = md5($_SERVER['REQUEST_METHOD'].':'.$data['uri']);
+	$valid_response = md5($A1.':'.$data['nonce'].':'.$data['nc'].':'.$data['cnonce'].':'.$data['qop'].':'.$A2);
+
+	if ($data['response'] != $valid_response)
+	   die ("You must be admin to view this page. Please authenticate properly.");
+
+	// ok, valid username & password
+    }
 }
-
 
 # now the user is authenticated and we can go on and connect to the database
 
