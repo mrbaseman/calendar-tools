@@ -143,12 +143,13 @@ if(!(isset($_SESSION["baikaladminauth"]) && $_SESSION["baikaladminauth"] === md5
 
 	if ($data['response'] != $valid_response)
 	   die ("You must be admin to view this page. Please authenticate properly.");
-
-	// ok, valid username & password
     }
+    // ok, valid username & password - we can establish the session now
+    $_SESSION["baikaladminauth"] === md5(BAIKAL_ADMIN_PASSWORDHASH);
 }
 
 # now the user is authenticated and we can go on and connect to the database
+
 
 if(PROJECT_DB_MYSQL){
   $db = new mysqli ( 
