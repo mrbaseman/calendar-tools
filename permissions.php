@@ -148,7 +148,23 @@ if(!(isset($_SESSION["baikaladminauth"]) && $_SESSION["baikaladminauth"] === md5
     $_SESSION["baikaladminauth"] = md5(BAIKAL_ADMIN_PASSWORDHASH);
 }
 
-# now the user is authenticated and we can go on and connect to the database
+// now the user is authenticated and we can go on: check if the user wants to log out
+
+if (isset($_POST['logout'])) {
+    if(isset($_SESSION["baikaladminauth"])) unset($_SESSION["baikaladminauth"]);
+    if(isset($_SERVER['PHP_AUTH_USER'])) unset($_SERVER['PHP_AUTH_USER']);
+    if(isset($_SERVER['PHP_AUTH_PW'])) unset($_SERVER['PHP_AUTH_PW']);
+    if(isset($_SERVER['PHP_AUTH_DIGEST'])) unset($_SERVER['PHP_AUTH_DIGEST']);
+    session_destroy();
+    // the browser might still have cached the credentials for http-auth
+    // we have to send the headers to flush these
+    header('HTTP/1.1 401 Unauthorized');
+    // however this does not always work. Therefore, give this hint to the users:
+    echo "You are logged out now. To ensure that the browser has not cached your credentials, please close all open browser windows.\n";
+    exit;
+}
+
+// if not logged out now, we can connect to the database
 
 
 if(PROJECT_DB_MYSQL){
@@ -481,6 +497,8 @@ foreach ($users as $idx => $owner){
 # finally the hidden field and the submit button
 echo "<p></p><input type=\"hidden\" name=\"token\" value=\"$hashval\" />\n";
 echo "<input type=\"submit\" name=\"submit\" value=\"submit\" />\n";
+echo "<input type=\"submit\" name=\"logout\" value=\"logout\" />\n";
+
 echo "</form></body></html>\n"
 # and that's it.
 ?>
