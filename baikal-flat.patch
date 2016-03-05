@@ -1,7 +1,7 @@
 this patch enables Baikal 0.2.7 to deliver caldav directories via http-GET
-diff -ru ./baikal-flat/vendor/sabre/dav/lib/Sabre/DAV/Server.php ../tmp/baikal-flat/vendor/sabre/dav/lib/Sabre/DAV/Server.php
---- ./baikal-flat/vendor/sabre/dav/lib/Sabre/DAV/Server.php	2013-10-02 20:38:26.000000000 +0200
-+++ ../tmp/baikal-flat/vendor/sabre/dav/lib/Sabre/DAV/Server.php	2015-01-25 22:44:57.283068171 +0100
+diff -ru A/baikal-flat/vendor/sabre/dav/lib/Sabre/DAV/Server.php B/baikal-flat/vendor/sabre/dav/lib/Sabre/DAV/Server.php
+--- A/baikal-flat/ivendor/sabre/dav/lib/Sabre/DAV/Server.php	2013-10-02 20:38:26.000000000 +0200
++++ B/baikal-flat/vendor/sabre/dav/lib/Sabre/DAV/Server.php	2015-01-25 22:44:57.283068171 +0100
 @@ -525,9 +525,15 @@
          $node = $this->tree->getNodeForPath($uri,0);
  
