@@ -52,131 +52,24 @@ if(file_exists(dirname(getcwd()). "/Core")) {
 	define("PROJECT_PATH_ROOT", dirname(dirname(getcwd())) . "/");	#../../
 }
 
-define("PROJECT_PATH_CORE", PROJECT_PATH_ROOT . "Core/");
-define("PROJECT_PATH_CORERESOURCES", PROJECT_PATH_CORE . "Resources/");
-define("PROJECT_PATH_SPECIFIC", PROJECT_PATH_ROOT . "Specific/");
-define("PROJECT_PATH_FRAMEWORKS", PROJECT_PATH_CORE . "Frameworks/");
-define("PROJECT_PATH_WWWROOT", PROJECT_PATH_CORE . "WWWRoot/");
-
-$sScript = substr($_SERVER["SCRIPT_FILENAME"], strlen($_SERVER["DOCUMENT_ROOT"]));
-$sDirName = str_replace("\\", "/", dirname($sScript));  
-if($sDirName !== ".") {
-   if(substr($sDirName, -1) !== "/") {
-      $sDirName .= "/";
-   }
-} else {
-   $sDirName = "/";
+if (!file_exists(PROJECT_PATH_ROOT . 'vendor/')) {
+    exit('<h1>Incomplete installation</h1><p>Ba&iuml;kal dependencies have not been installed. If you are a regular user, this means that you probably downloaded the wrong zip file.</p><p>To install the dependencies manually, execute "<strong>composer install</strong>" in the Ba&iuml;kal root folder.</p>');
 }
 
-$sBaseUrl=substr($sDirName, 0, -1 * strlen(PROJECT_CONTEXT_BASEURI));
-if(substr($sBaseUrl, -1) !== "/") {
-   $sBaseUrl .= "/";
-}
+require PROJECT_PATH_ROOT . 'vendor/autoload.php';
 
-if(substr($sBaseUrl, 0, 1) !== "/") {
-   $sBaseUrl = "/" . $sBaseUrl;
-}
-define("PROJECT_BASEURI", $sBaseUrl);
+# Bootstraping Flake
+\Flake\Framework::bootstrap();
 
-# ok, now we have everything and can include the config
-
-require(PROJECT_PATH_ROOT . 'Specific/config.php');
-require(PROJECT_PATH_ROOT . 'Specific/config.system.php');
-
-# make sure the user is authenticated as admin, if not authenticate
-
-if(!(isset($_SESSION["baikaladminauth"]) && $_SESSION["baikaladminauth"] === md5(BAIKAL_ADMIN_PASSWORDHASH))) {
-    # There is no authentication from baikal, so we have to try to do authentication,
-    # see php.net/manual/features.http-auth.php
-    if (defined("BAIKAL_DAV_AUTH_TYPE") && ( BAIKAL_DAV_AUTH_TYPE === "Basic")) {
-       # Basic authentication
-       if (!isset($_SERVER['PHP_AUTH_USER'])) {
-	   header('WWW-Authenticate: Basic realm="' . BAIKAL_AUTH_REALM . '"');
-	   header('HTTP/1.0 401 Unauthorized');
-	   die ("You are not allowed to see this page. Please authenticate.");
-       } 
-
-       $sPassHash =  md5('admin:' . BAIKAL_AUTH_REALM . ':' . $_SERVER['PHP_AUTH_PW']);
-
-       if( ! ( $_SERVER['PHP_AUTH_USER'] === "admin" 
-               && $sPassHash === BAIKAL_ADMIN_PASSWORDHASH)) {
-	   die ("You must be admin to view this page. Please authenticate properly.");
-       }
-    } else {
-        # Digest authentication
-
-	if (empty($_SERVER['PHP_AUTH_DIGEST'])) {
-	    header('HTTP/1.1 401 Unauthorized');
-	    header('WWW-Authenticate: Digest realm="'.BAIKAL_AUTH_REALM.
-        	   '",qop="auth",nonce="'.uniqid().'",opaque="'.md5(BAIKAL_AUTH_REALM).'"');
-
-	    die('You are not allowed to see this page. Please authenticate.');
-	}
-
-	// next we need this function to parse the http auth header
-	function http_digest_parse($txt)
-	{
-	    // protect against missing data
-	    $needed_parts = array('nonce'=>1, 'nc'=>1, 'cnonce'=>1, 'qop'=>1, 'username'=>1, 'uri'=>1, 'response'=>1);
-	    $data = array();
-	    $keys = implode('|', array_keys($needed_parts));
-
-	    preg_match_all('@(' . $keys . ')=(?:([\'"])([^\2]+?)\2|([^\s,]+))@', $txt, $matches, PREG_SET_ORDER);
-
-	    foreach ($matches as $m) {
-        	$data[$m[1]] = $m[3] ? $m[3] : $m[4];
-        	unset($needed_parts[$m[1]]);
-	    }
-
-	    return $needed_parts ? false : $data;
-	}	
-
-	// now use it to analyze the PHP_AUTH_DIGEST variable
-	if (!($data = http_digest_parse($_SERVER['PHP_AUTH_DIGEST'])) ||
-	    !($data['username'] === "admin"))
-	    die("You must be admin to view this page. Please authenticate properly.");
-
-	// generate the valid response
-	$A1 = BAIKAL_ADMIN_PASSWORDHASH;
-	$A2 = md5($_SERVER['REQUEST_METHOD'].':'.$data['uri']);
-	$valid_response = md5($A1.':'.$data['nonce'].':'.$data['nc'].':'.$data['cnonce'].':'.$data['qop'].':'.$A2);
-
-	if ($data['response'] != $valid_response)
-	   die ("You must be admin to view this page. Please authenticate properly.");
-    }
-    // ok, valid username & password - we can establish the session now
-    $_SESSION["baikaladminauth"] = md5(BAIKAL_ADMIN_PASSWORDHASH);
-}
-
-// now the user is authenticated and we can go on: check if the user wants to log out
-
-if (isset($_POST['logout'])) {
-    if(isset($_SESSION["baikaladminauth"])) unset($_SESSION["baikaladminauth"]);
-    if(isset($_SERVER['PHP_AUTH_USER'])) unset($_SERVER['PHP_AUTH_USER']);
-    if(isset($_SERVER['PHP_AUTH_PW'])) unset($_SERVER['PHP_AUTH_PW']);
-    if(isset($_SERVER['PHP_AUTH_DIGEST'])) unset($_SERVER['PHP_AUTH_DIGEST']);
-    session_destroy();
-    // the browser might still have cached the credentials for http-auth
-    // we have to send the headers to flush these
-    header('HTTP/1.1 401 Unauthorized');
-    // however this does not always work. Therefore, give this hint to the users:
-    echo "You are logged out now. To ensure that the browser has not cached your credentials, please close all open browser windows.\n";
-    exit;
-}
-
-// if not logged out now, we can connect to the database
+# Bootstrap BaikalAdmin
+\BaikalAdmin\Framework::bootstrap();
 
 
-if(PROJECT_DB_MYSQL){
-  $db = new mysqli ( 
-     PROJECT_DB_MYSQL_HOST,
-     PROJECT_DB_MYSQL_USERNAME,
-     PROJECT_DB_MYSQL_PASSWORD,
-     PROJECT_DB_MYSQL_DBNAME
-  );
-} else {
-  $db = new SQLite3(PROJECT_SQLITE_FILE); 
-}
+if (!\BaikalAdmin\Core\Auth::isAuthenticated()) {
+    exit('<h1>Permission denied. Please log in to Ba&iuml;kal first.</p>');
+} 
+
+$db =  $GLOBALS["DB"];
 
 
 # build list of known users
@@ -186,10 +79,7 @@ $users=array();
 $group_ids=array();
 
 $get_content = $db->query($query);
-while( PROJECT_DB_MYSQL 
-         ? ($fetch_content = $get_content->fetch_array()) 
-         : ($fetch_content = $get_content->fetchArray() )
-     ){
+while( $fetch_content = $get_content->fetch() ){
         $user = $fetch_content['username'];
         $users[]=$user;
 }
@@ -204,9 +94,7 @@ foreach ($users as $idx => $user){
         .'FROM `principals` '
          .'WHERE `uri` = "principals/'.$user.'/calendar-proxy-read"';
    $get_content = $db->query($query);
-   PROJECT_DB_MYSQL 
-       ? $fetch_content=$get_content->fetch_array() 
-       : $fetch_content=$get_content->fetchArray();
+   $fetch_content = $get_content->fetch();
    if(!$fetch_content){
       $query_insert='INSERT INTO '
                    .'`principals` (`uri`)'
@@ -215,9 +103,8 @@ foreach ($users as $idx => $user){
           echo "error adding read-access for $user<br/>\n";
       } else {
          $get_content = $db->query($query);
-         PROJECT_DB_MYSQL 
-           ? $fetch_content=$get_content->fetch_array() 
-           : $fetch_content=$get_content->fetchArray();
+         $fetch_content = $get_content->fetch();
+
      }
    }
    $group_ids['principals/'.$user.'/calendar-proxy-read'] = $fetch_content["id"];
@@ -227,9 +114,7 @@ foreach ($users as $idx => $user){
          .'FROM `principals` '
          .'WHERE `uri` = "principals/'.$user.'/calendar-proxy-write"';
    $get_content = $db->query($query);
-   PROJECT_DB_MYSQL 
-     ? $fetch_content=$get_content->fetch_array() 
-     : $fetch_content=$get_content->fetchArray();
+   $fetch_content = $get_content->fetch();
    if(!$fetch_content){
       $query_insert='INSERT INTO '
                    .'`principals` (`uri`) '
@@ -238,9 +123,7 @@ foreach ($users as $idx => $user){
           echo "error adding read-access for $user<br/>\n";
       } else {
          $get_content = $db->query($query);
-         PROJECT_DB_MYSQL 
-           ? $fetch_content=$get_content->fetch_array() 
-           : $fetch_content=$get_content->fetchArray();
+         $fetch_content = $get_content->fetch();
      }
    }
    $group_ids['principals/'.$user.'/calendar-proxy-write'] = $fetch_content["id"];
@@ -250,9 +133,7 @@ foreach ($users as $idx => $user){
          .'FROM `principals` '
          .'WHERE `uri` = "principals/'.$user.'"';
    $get_content = $db->query($query);
-   PROJECT_DB_MYSQL 
-     ? $fetch_content=$get_content->fetch_array() 
-     : $fetch_content=$get_content->fetchArray();
+   $fetch_content = $get_content->fetch();
    $group_ids['principals/'.$user] = $fetch_content["id"];
 } # end of user loop
 
@@ -270,9 +151,7 @@ foreach ($users as $idx => $user){
          .'WHERE `principal_id` = "'.$read_permission.'"';
    $get_content = $db->query($query);
    $members=array();
-   while( PROJECT_DB_MYSQL 
-            ? $fetch_content=$get_content->fetch_array() 
-            : $fetch_content=$get_content->fetchArray()) {
+   while(    $fetch_content = $get_content->fetch() ) {
      $user_id = $fetch_content['member_id'];
      if($user_id==$owner_id){
         $query='DELETE FROM '
@@ -293,9 +172,7 @@ foreach ($users as $idx => $user){
          .'WHERE `principal_id` = "'.$write_permission.'"';
    $get_content = $db->query($query);
    $members=array();
-   while( PROJECT_DB_MYSQL 
-            ? $fetch_content=$get_content->fetch_array() 
-            : $fetch_content=$get_content->fetchArray()) {
+   while(    $fetch_content = $get_content->fetch() ) {
       $user_id = $fetch_content['member_id'];
       if($user_id==$owner_id){
          $query='DELETE '
@@ -314,7 +191,7 @@ foreach ($users as $idx => $user){
 $hashval = $_SERVER['REMOTE_ADDR'];
 $hashval.= var_export($group_members_read, true);
 $hashval.= var_export($group_members_write, true);
-$hashval.= BAIKAL_ENCRYPTION_KEY;
+$hashval.= session_id();
 $hashval.=date("d.m.Y");
 $hashval=md5($hashval);
 
@@ -404,9 +281,7 @@ if(isset($_POST['submit']) AND $_POST['submit'] != ''){
           .'WHERE `principal_id` = "'.$read_permission.'"';
     $get_content = $db->query($query);
     $members=array();
-    while( PROJECT_DB_MYSQL 
-             ? $fetch_content=$get_content->fetch_array() 
-             : $fetch_content=$get_content->fetchArray()) {
+    while(    $fetch_content = $get_content->fetch() ) {
       $user_id = $fetch_content['member_id'];
       if($user_id!==$owner_id){
          $members[]=$user_id;
@@ -421,9 +296,7 @@ if(isset($_POST['submit']) AND $_POST['submit'] != ''){
           .'WHERE `principal_id` = "'.$write_permission.'"';
     $get_content = $db->query($query);
     $members=array();
-    while( PROJECT_DB_MYSQL 
-             ? $fetch_content=$get_content->fetch_array() 
-             : $fetch_content=$get_content->fetchArray()){
+    while(    $fetch_content = $get_content->fetch() ){
       $user_id = $fetch_content['member_id'];
       if($user_id!=$owner_id){
          $members[]=$user_id;
@@ -435,7 +308,7 @@ if(isset($_POST['submit']) AND $_POST['submit'] != ''){
   $hashval = $_SERVER['REMOTE_ADDR'];
   $hashval.= var_export($group_members_read, true);
   $hashval.= var_export($group_members_write, true);
-  $hashval.= BAIKAL_ENCRYPTION_KEY;
+  $hashval.= session_id();
   $hashval.=date("d.m.Y");
   $hashval=md5($hashval);
 
@@ -497,9 +370,8 @@ foreach ($users as $idx => $owner){
 # finally the hidden field and the submit button
 echo "<p></p><input type=\"hidden\" name=\"token\" value=\"$hashval\" />\n";
 echo "<input type=\"submit\" name=\"submit\" value=\"submit\" />\n";
-echo "<input type=\"submit\" name=\"logout\" value=\"logout\" />\n";
 
-echo "</form></body></html>\n"
+echo "</form></body></html>\n";
 # and that's it.
 ?>
 
